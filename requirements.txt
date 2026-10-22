@@ -8,3 +8,6 @@ nltk
 wordcloud
 jupyter
 streamlit
+xgboost
+lightgbm
+scipy

@@ -12,8 +12,9 @@
 |---|---|
 | Reviews analisados | **2.384** (após remover 766 vazios e duplicados) |
 | Desafio | Apenas **8,6%** dos reviews são negativos |
-| Resultado | O modelo encontra **7 em cada 10 clientes insatisfeitos**, lendo só **11%** dos reviews |
+| Resultado | O modelo encontra **2 em cada 3 clientes insatisfeitos**, lendo só **9%** dos reviews (quase **7x** mais que lendo ao acaso) |
 | Principal descoberta | A palavra **"not"** é o sinal mais forte de insatisfação, e a versão original a removia do texto |
+| Método | 5 algoritmos comparados (XGBoost, Random Forest, LightGBM, Regressão Logística, Naive Bayes) com treino/validação/teste e validação cruzada, teste anti-vazamento e ficha do modelo |
 | Entrega | Modelo em **Pipeline** + **app Streamlit** que classifica um review e mostra as palavras que pesaram |
 
 ---
@@ -72,12 +73,20 @@ Analise_de_sentimento-avaliacoes_de_produtos/
 ├── Imagens/                                   # gráficos gerados pelo notebook
 ├── Model/
 │   ├── text_classifier.pkl                    # modelo da versão original
-│   └── modelo_sentimento.pkl                  # pipeline + limiar da v2 (usado pelo app)
+│   ├── modelo_sentimento.pkl                  # pipeline + limiar da v2 (usado pelo app)
+│   └── modelo_sentimento.json                 # ficha do modelo (métricas, limiar, hiperparâmetros, avisos)
 ├── Notebooks/
 │   ├── Análise de sentimento - avaliações de produtos.ipynb        # versão original
 │   └── Análise de sentimento - avaliações de produtos - v2.ipynb   # versão reorganizada (CRISP-DM)
+├── docs/
+│   └── decisoes_analiticas.md                 # registro das decisões do projeto (DA-01 a DA-08)
+├── reports/
+│   └── comparacao_modelos.csv                 # métricas dos 5 algoritmos na validação
 ├── src/
 │   ├── texto.py                               # limpeza do texto e explicação da previsão
+│   ├── estatistica.py                         # testes das hipóteses (com tamanho de efeito) e regra do IQR
+│   ├── selecao.py                             # seleção de variáveis (Random Forest + Informação Mútua)
+│   ├── avaliacao.py                           # métricas, relatório de validação, limiar, custo, ganho e ficha
 │   └── graficos.py                            # funções de gráficos
 ├── app.py                                     # app Streamlit
 ├── requirements.txt
@@ -106,10 +115,10 @@ streamlit run app.py
 | Fase | O que foi feito |
 |---|---|
 | **01. Entendimento do negócio** | Definição do problema, da métrica (encontrar os negativos) e da entrega |
-| **02. Preparação dos dados** | Remoção de vazios e duplicados, análise exploratória com 6 hipóteses e limpeza do texto |
-| **03. Modelagem** | Texto → números (TF-IDF), comparação de 4 modelos, ajuste fino, escolha do limiar e teste de calibração |
+| **02. Preparação dos dados** | Remoção de vazios e duplicados, outliers pela regra do IQR, variáveis com vazamento, EDA com 6 hipóteses (com testes estatísticos) e limpeza do texto |
+| **03. Modelagem** | TF-IDF, divisão 60/20/20, SMOTE, seleção de variáveis, 5 algoritmos (uma seção cada), validação cruzada, ajuste fino, limiar com curva de custo, calibração e teste anti-vazamento |
 | **04. Avaliação** | Métricas no teste, leitura dos acertos e erros e palavras mais importantes |
-| **05. Implantação** | Pipeline salvo, simulação com reviews novos e app Streamlit |
+| **05. Implantação** | Pipeline e ficha do modelo salvos, simulação, ganho contra um sorteio e app Streamlit |
 
 ## 7. Principais descobertas da análise exploratória
 
@@ -163,22 +172,29 @@ streamlit run app.py
 
 > 💡 **Analogia:** o TF-IDF funciona como um marca-texto, destacando as palavras que realmente importam em cada review.
 
-**🔍 Seleção de variáveis**: medimos a relevância de cada uma das 3.927 colunas (palavras e variações do produto) com dois métodos, o **Random Forest** ("quais perguntas o modelo mais usou para decidir") e a **Informação Mútua** ("quanto a palavra, sozinha, conta sobre o sentimento"). Os dois apontam **"not"** como a variável mais relevante, seguida de palavras de defeito e devolução (*work*, *device*, *back*, *return*, *stopped*). A variação do produto quase não pesa.
+**🔍 Divisão dos dados**: **60% treino** (o modelo aprende), **20% validação** (comparar algoritmos e escolher o limiar) e **20% teste** (a "prova final", usada uma única vez). Como a validação tem só 41 negativos, a comparação também usa **validação cruzada** (média ± desvio).
+
+**🔍 Seleção de variáveis**: medimos a relevância de cada uma das 3.047 colunas (palavras e variações do produto) com dois métodos, o **Random Forest** ("quais perguntas o modelo mais usou para decidir") e a **Informação Mútua** ("quanto a palavra, sozinha, conta sobre o sentimento"). Os dois apontam **"not"** como a variável mais relevante, seguida de palavras de defeito e devolução (*work*, *device*, *back*, *return*, *stopped*). A variação do produto quase não pesa.
 
 <div align="center">
 <img src="Imagens/Informacao%20mutua.png" width="650px">
 </div>
 
-**4️⃣ Comparação de modelos**: testamos 4 combinações com validação cruzada, medindo a capacidade de **encontrar os reviews negativos**:
+**4️⃣ Comparação de modelos**: 5 algoritmos treinados com o treino balanceado (SMOTE) e avaliados na validação real, cada um com a sua seção (métricas, matriz de confusão e treino × validação para detectar sobreajuste):
 
-| Modelo | Precisão | Recall | F1 |
-|---|---|---|---|
-| Naive Bayes + SMOTE *(abordagem da v1)* | 37,6% | 74,4% | 49,9% |
-| Regressão Logística + SMOTE | 50,9% | 64,0% | 56,6% |
-| **Regressão Logística (class_weight)** ✅ | 47,6% | 70,1% | **56,6%** |
-| LinearSVC (class_weight) | 59,9% | 53,1% | 55,9% |
+| Modelo | Precisão | Recall | F1 | PR-AUC (validação) | PR-AUC (validação cruzada) |
+|---|---|---|---|---|---|
+| Naive Bayes *(algoritmo da v1)* | 45,3% | **82,9%** | **58,6%** | **0,640** | 0,550 ± 0,078 |
+| **Regressão Logística** ✅ | 50,9% | 68,3% | 58,3% | 0,587 | **0,569 ± 0,038** |
+| LightGBM | **61,5%** | 39,0% | 47,8% | 0,545 | 0,518 ± 0,056 |
+| XGBoost | 44,8% | 31,7% | 37,1% | 0,418 | 0,491 ± 0,066 |
+| Random Forest | 41,2% | 17,1% | 24,1% | 0,405 | 0,453 ± 0,067 |
 
-A **Regressão Logística** foi escolhida por ter o melhor F1, um recall alto e por ser **interpretável**: cada palavra tem um peso que mostra se ela empurra o review para positivo ou negativo. Depois do ajuste fino, a qualidade do modelo (PR-AUC) subiu de **0,57 para 0,64**.
+<div align="center">
+<img src="Imagens/Comparacao%20de%20modelos.png" width="850px">
+</div>
+
+A **Regressão Logística** foi escolhida: empata com o Naive Bayes na validação, mas é a **melhor e mais estável na validação cruzada**, tem o **menor sobreajuste** e é **interpretável** (cada palavra tem um peso). Os modelos de árvore decoraram o treino (AUC de 1,000 no treino). Depois do ajuste fino, a PR-AUC na validação subiu de **0,59 para 0,65**.
 
 **5️⃣ Escolha do limiar**: o modelo dá um **score** de 0 a 1 para cada review. O limiar é o ponto a partir do qual o review é considerado negativo.
 
@@ -186,8 +202,11 @@ A **Regressão Logística** foi escolhida por ter o melhor F1, um recall alto e 
 <img src="Imagens/Escolha%20do%20limiar.png" width="700px">
 </div>
 
-- Para o atendimento, **deixar um cliente insatisfeito sem resposta custa mais** do que ler um review a mais. Por isso o limiar foi reduzido de 0,50 para **0,34**, escolhido para encontrar pelo menos 75% dos negativos.
-- A escolha foi feita **só com os dados de treino**, e o teste foi usado uma única vez, no final.
+- Comparamos 3 critérios na validação: **F1 máximo**, **custo mínimo** (perder um cliente insatisfeito custa 5 vezes mais que ler um review à toa) e **meta de recall de 75%**.
+- O limiar escolhido é **0,405**, onde o F1 máximo e a meta de recall coincidem. O de custo mínimo (0,25) fica como alternativa para quando o time tiver mais capacidade de leitura.
+- A escolha foi feita **na validação**, e o teste foi usado uma única vez, no final.
+
+**6️⃣ Teste anti-vazamento**: com a nota do cliente como entrada, o modelo acertaria **100%** (ele aprenderia a regra "nota 1 ou 2 = negativo"). Por isso a nota fica de fora: o modelo precisa funcionar com textos **sem nota**.
 
 ## 9. Resultado do modelo
 
@@ -195,16 +214,23 @@ Avaliação no **teste** (477 reviews que o modelo nunca viu, sendo 41 negativos
 
 | Métrica | Valor | Em linguagem de negócio |
 |---|---|---|
-| **Recall** | **70,7%** | De cada **10 clientes insatisfeitos**, o modelo encontra **7** |
-| **Precisão** | **53,7%** | De cada **2 alertas**, ~**1** é realmente um review negativo |
-| **F1** | **61,1%** | Equilíbrio entre os dois (era 43% na versão original) |
+| **Recall** | **65,9%** | De cada **3 clientes insatisfeitos**, o modelo encontra **2** |
+| **Precisão** | **60,0%** | De cada **5 alertas**, **3** são realmente reviews negativos |
+| **F1** | **62,8%** | Equilíbrio entre os dois (era 43% na versão original) |
+| **PR-AUC** | **0,595** | ~7x melhor que um sorteio (0,086) |
 
 <div align="center">
 <img src="Imagens/Matriz%20de%20confusao.png" width="380px">
 </div>
 
-- Na prática, o time lê **54 dos 477 reviews (11%)** e encontra **29 dos 41** clientes insatisfeitos.
-- **8 dos 25 alarmes falsos** são reviews **nota 3**, que o rótulo considera positivos, mas que contêm críticas (ex.: *"I try use with yale lock but isn't work"*).
+- Na prática, o time lê **45 dos 477 reviews (9%)** e encontra **27 dos 41** clientes insatisfeitos. Lendo 45 reviews ao acaso, encontraria ~4.
+- **7 dos 18 alarmes falsos** são reviews **nota 3**, que o rótulo considera positivos, mas que contêm críticas (ex.: *"I try use with yale lock but isn't work"*).
+
+<div align="center">
+<img src="Imagens/Ganho%20do%20modelo%20x%20sorteio.png" width="650px">
+</div>
+
+Lendo os reviews na **ordem do score**, os 100 primeiros já contêm **80%** dos clientes insatisfeitos.
 
 ## 10. Palavras que mais indicam insatisfação
 
@@ -242,17 +268,20 @@ A versão original foi mantida no repositório para mostrar a evolução. Na v2:
 | Stopwords removiam *not*, *no*, *don't* | **Negações mantidas** | *"not good"* deixa de virar *"good"* |
 | Vocabulário criado com a base inteira | Tudo dentro de um **Pipeline** treinado só no treino | Sem vazamento de informação do teste |
 | Destaque para o F1 da classe positiva (93%) | Métricas da **classe negativa** (a que importa) | O F1 negativo real era 43% |
-| Limiar escolhido **no teste** (e com as classes invertidas) | Limiar escolhido por validação cruzada no treino | Avaliação honesta |
-| Naive Bayes x Regressão Logística | 4 modelos comparados + ajuste fino + calibração | Escolha justificada |
+| Limiar escolhido **no teste** (e com as classes invertidas) | Limiar escolhido **na validação**, com curva de custo | Avaliação honesta |
+| Naive Bayes x Regressão Logística | 5 algoritmos (cada um com a sua seção), validação cruzada, ajuste fino, calibração e teste anti-vazamento | Escolha justificada |
+| Hipóteses só com gráficos | **Testes estatísticos** com tamanho de efeito (Mann-Whitney, qui-quadrado, V de Cramér, odds ratio) | Distingue efeito real de acaso |
+| Sem registro das decisões | `docs/decisoes_analiticas.md` e ficha do modelo em JSON | Rastreabilidade |
 | Anotação dizia que nota 3 era negativa | Corrigido: nota 3 é rotulada como **positiva** | Entendimento correto do rótulo |
 
 ## 13. Insights
 
-1. **Clientes insatisfeitos escrevem o dobro**: os reviews negativos trazem detalhes do problema, o que é informação valiosa para o time de produto.
-2. **Negação é o principal sinal de insatisfação**: remover *not* na limpeza do texto apaga justamente o que mais importa.
+1. **Clientes insatisfeitos escrevem o dobro** (efeito moderado): os reviews negativos trazem detalhes do problema, o que é informação valiosa para o time de produto.
+2. **Negação é o principal sinal de insatisfação**: um review com negação tem **7 vezes mais chance** de ser negativo. Remover *not* na limpeza apaga justamente o que mais importa.
 3. **Intenção de devolução é detectável**: *back* e *return* identificam clientes prestes a devolver o produto.
 4. **Alguns produtos geram mais críticas**: White, Black e Black Spot têm até 6 vezes mais reviews negativos que os modelos em tecido.
-5. **O modelo reduz o trabalho manual**: lendo ~11% dos reviews, o time encontra 7 em cada 10 clientes insatisfeitos.
+5. **O modelo reduz o trabalho manual**: lendo ~9% dos reviews, o time encontra 2 em cada 3 clientes insatisfeitos.
+6. **Modelos simples venceram**: com poucos exemplos e milhares de palavras, a Regressão Logística foi mais estável que XGBoost, Random Forest e LightGBM.
 
 ## 14. Limites
 

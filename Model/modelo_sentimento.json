@@ -1,0 +1,31 @@
+{
+  "data_treino": "2026-10-22 17:54",
+  "modelo": "Regressão Logística ajustada (Pipeline: limpeza + TF-IDF + One-Hot + LogisticRegression)",
+  "arquivo": "modelo_sentimento.pkl",
+  "treinado_com": "1.907 reviews (treino + validação)",
+  "colunas_de_entrada": [
+    "verified_reviews",
+    "variation"
+  ],
+  "alvo": "negativo (1 = review negativo, nota 1 ou 2)",
+  "limiar_recomendado": 0.405,
+  "criterio_do_limiar": "maior limiar com recall >= 75% na validação",
+  "metricas_no_teste": {
+    "Acurácia": 0.9329,
+    "Precisão": 0.6,
+    "Recall (Sensibilidade)": 0.6585,
+    "F1-Score": 0.6279,
+    "AUC-ROC": 0.9244,
+    "PR-AUC": 0.5952
+  },
+  "hiperparametros": {
+    "modelo__C": "8.471801418819979",
+    "prep__texto__min_df": "1",
+    "prep__texto__ngram_range": "(1, 1)"
+  },
+  "avisos": [
+    "Use o score como ORDEM de prioridade de leitura: com class_weight, a probabilidade superestima o risco.",
+    "Não use 'rating' como entrada: ela é a origem do rótulo (vazamento).",
+    "Treinado com reviews em inglês de produtos Amazon Alexa (2018)."
+  ]
+}
