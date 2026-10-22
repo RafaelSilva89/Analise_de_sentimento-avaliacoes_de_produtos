@@ -1,181 +1,268 @@
-# Análise de sentimento - avaliações de produtos
-Este repositório contém script para classificar os reviews positivos ou negativos dos produtos Amazon Alexa
+# 💬 Análise de Sentimento de Reviews de Produtos
+
+**Um modelo que lê avaliações de clientes e encontra automaticamente os insatisfeitos.**
 
 <div align="center">
 <img src="Imagens/Capa.PNG" width="500px">
 </div>
-</br>
 
+**Python · NLP · TF-IDF · Scikit-learn · Regressão Logística · Streamlit · CRISP-DM**
 
-# _Objetivo do projeto_
+| 📊 Destaques | |
+|---|---|
+| Reviews analisados | **2.384** (após remover 766 vazios e duplicados) |
+| Desafio | Apenas **8,6%** dos reviews são negativos |
+| Resultado | O modelo encontra **7 em cada 10 clientes insatisfeitos**, lendo só **11%** dos reviews |
+| Principal descoberta | A palavra **"not"** é o sinal mais forte de insatisfação, e a versão original a removia do texto |
+| Entrega | Modelo em **Pipeline** + **app Streamlit** que classifica um review e mostra as palavras que pesaram |
 
-<img src="Imagens/Capa2.PNG" width="220px" align='right'>
+---
 
-<p align = 'left'>
+## 📑 Sumário
 
-Utilizar uma base de dados para analisar os reviews dos produtos Amazon Alexa e construir um classificador de sentimentos que indique se um texto é positivo ou negativo, a fim de que as empresas possam utilizar essas informações para verificar a opinião dos clientes sobre seus produtos.
-<p>
+1. [Contexto do problema](#1-contexto-do-problema)
+2. [Objetivo](#2-objetivo)
+3. [Base de dados](#3-base-de-dados)
+4. [Estrutura do projeto](#4-estrutura-do-projeto)
+5. [Como executar](#5-como-executar)
+6. [Etapas do projeto (CRISP-DM)](#6-etapas-do-projeto-crisp-dm)
+7. [Principais descobertas da análise exploratória](#7-principais-descobertas-da-análise-exploratória)
+8. [Construção da solução](#8-construção-da-solução)
+9. [Resultado do modelo](#9-resultado-do-modelo)
+10. [Palavras que mais indicam insatisfação](#10-palavras-que-mais-indicam-insatisfação)
+11. [App interativo (Streamlit)](#11-app-interativo-streamlit)
+12. [O que mudou da v1 para a v2](#12-o-que-mudou-da-v1-para-a-v2)
+13. [Insights](#13-insights)
+14. [Limites](#14-limites)
+15. [Próximos passos](#15-próximos-passos)
 
-<br>
+---
 
-# _1. Problema de Negócio_
+## 1. Contexto do problema
 
-Este estudo é importante pelo fato de que praticamente todas as empresas possuem dados em redes sociais e este tipo de técnica também pode ser utilizado em textos que são postados em redes sociais e submeter o classificador para verificar se as pessoas estão falando bem ou se estão falando mal de um determinado produto.
+Empresas recebem diariamente centenas de avaliações de clientes em sites e redes sociais. **Ler tudo manualmente é inviável**, e um cliente insatisfeito sem resposta pode virar uma reclamação pública, uma devolução ou um cliente perdido.
 
-O departamento de relações públicas precisa acompanhar e análisar os reviews das pessoas, quando publicadas nas redes sociais.
+Este projeto usa **reviews reais de clientes dos produtos Amazon Alexa** (Echo, Echo Dot, Fire TV Stick etc.) para construir um "leitor automático" que separa os reviews **positivos** dos **negativos**.
 
-Fonte: https://www.kaggle.com/sid321axn/amazon-alexa-reviews/kernels
+**Fonte dos dados:** [Amazon Alexa Reviews – Kaggle](https://www.kaggle.com/sid321axn/amazon-alexa-reviews)
 
-<br>
+## 2. Objetivo
 
-# _2. Justificativa_
+Construir um modelo que receba o **texto de um review** e indique se ele é **positivo ou negativo**, priorizando **encontrar os clientes insatisfeitos**.
 
-- **Por quê:** O estudo é importante porque permite às empresas compreender a opinião dos clientes sobre seus produtos, a partir da análise de reviews postados em redes sociais. Isso pode ser utilizado para identificar problemas e pontos fortes dos produtos, além de orientar as decisões de desenvolvimento e marketing.
-- **Como:** A partir da coleta de uma base de dados de reviews de produtos em redes sociais, serão aplicadas técnicas de análise de sentimentos para classificar cada texto em positivo ou negativo. Diferentes métodos podem ser utilizados para construir o classificador de sentimentos, tais como abordagens baseadas em regras, aprendizado supervisionado com algoritmos de classificação ou aprendizado não supervisionado com técnicas de clustering.
-- **O quê:** A entrega do projeto consistirá em um relatório com a análise dos resultados e do desempenho do classificador de sentimentos, além de sugestões de ações que as empresas podem tomar para melhorar seus produtos. Além disso, pode ser entregue um software ou API para que as empresas possam utilizar o classificador em seus próprios sistemas. O resultado final será uma ferramenta capaz de fornecer informações valiosas para as empresas sobre a opinião dos clientes e permitir que elas tomem decisões informadas para melhorar seus produtos e serviços.
+> **Pergunta de negócio:** *É possível identificar automaticamente os clientes insatisfeitos a partir do que eles escrevem, para que o time de atendimento aja antes que o problema cresça?*
 
-<br>
+## 3. Base de dados
 
-# _3. Premissas_
+| Variável | Descrição |
+|---|---|
+| `rating` | Nota que o cliente deu ao produto (1 a 5) |
+| `date` | Data do review (maio a julho de 2018) |
+| `variation` | Variação do produto (modelo e cor, ex.: *Black Dot*, *Charcoal Fabric*) |
+| `verified_reviews` | **Texto** escrito pelo cliente (em inglês) |
+| `feedback` | **Rótulo**: notas 1–2 = negativo · notas 3–5 = positivo |
 
-O conjunto de dados de amostra resume o comportamento de 3.150 clientes da Amazon.
+## 4. Estrutura do projeto
 
-As variáveis originais do conjuto de dados são:<br>
+```
+Analise_de_sentimento-avaliacoes_de_produtos/
+├── Datasets/
+│   ├── amazon_alexa.tsv                       # base original (Kaggle)
+│   └── amazon_alexa_limpo.csv                 # base sem vazios e duplicados (gerada no notebook)
+├── Imagens/                                   # gráficos gerados pelo notebook
+├── Model/
+│   ├── text_classifier.pkl                    # modelo da versão original
+│   └── modelo_sentimento.pkl                  # pipeline + limiar da v2 (usado pelo app)
+├── Notebooks/
+│   ├── Análise de sentimento - avaliações de produtos.ipynb        # versão original
+│   └── Análise de sentimento - avaliações de produtos - v2.ipynb   # versão reorganizada (CRISP-DM)
+├── src/
+│   ├── texto.py                               # limpeza do texto e explicação da previsão
+│   └── graficos.py                            # funções de gráficos
+├── app.py                                     # app Streamlit
+├── requirements.txt
+└── README.md
+```
 
-Variável | Definição
------------- | -------------
-rating | nota que a pessoa deu ao produto|
-date | data de quando o review foi postado no site|
-variation | variação do produto, que pode indicar as cores|
-verified_reviews | texto que o usuário escreveu sobre o produto|
-feedback | 1 que é um texto positivo e 0 que é um texto negativo|
+## 5. Como executar
 
-<br>
+```bash
+# 1. Clonar o repositório
+git clone https://github.com/RafaelSilva89/Analise_de_sentimento-avaliacoes_de_produtos.git
+cd Analise_de_sentimento-avaliacoes_de_produtos
 
-# _4. Planejamento da Solução_
+# 2. Instalar as dependências
+pip install -r requirements.txt
 
-1. **ENTENDIMENTO DO NEGÓCIO**
-<p>Definição do problema: É importante definir claramente qual é o problema a ser resolvido ou a pergunta a ser respondida. É preciso entender o objetivo do projeto e a relevância do problema.</p>
+# 3. Abrir o notebook e executar todas as células (gera o modelo usado pelo app)
+jupyter notebook "Notebooks/Análise de sentimento - avaliações de produtos - v2.ipynb"
 
+# 4. Abrir o app
+streamlit run app.py
+```
 
-2. **COLETA DOS DADOS**
-<p>Coleta de dados: Nesta etapa, os dados são coletados a partir de diversas fontes, como bases de dados, APIs, arquivos de texto, imagens, etc.</p>
+## 6. Etapas do projeto (CRISP-DM)
 
+| Fase | O que foi feito |
+|---|---|
+| **01. Entendimento do negócio** | Definição do problema, da métrica (encontrar os negativos) e da entrega |
+| **02. Preparação dos dados** | Remoção de vazios e duplicados, análise exploratória com 6 hipóteses e limpeza do texto |
+| **03. Modelagem** | Texto → números (TF-IDF), comparação de 4 modelos, ajuste fino, escolha do limiar e teste de calibração |
+| **04. Avaliação** | Métricas no teste, leitura dos acertos e erros e palavras mais importantes |
+| **05. Implantação** | Pipeline salvo, simulação com reviews novos e app Streamlit |
 
-3. **LIMPEZA DOS DADOS**
-<p>Limpeza dos dados: Esta etapa consiste na descrição estatística dos dados coletados, como média, mediana, desvio padrão, entre outros. É importante entender os dados coletados, avaliar a qualidade dos dados e identificar quaisquer problemas ou limitações.</p>
+## 7. Principais descobertas da análise exploratória
 
-
-4. **ANÁLISE EXPLORATÓRIA DOS DADOS**
-<p>Análise exploratória de dados: Nesta etapa, os dados são visualizados e analisados graficamente para identificar padrões e relações entre as variáveis.</p>
-
-
-5. **PREPARAÇÃO DOS DADOS**
-<p>Preparação de dados ou Pré-processamento de dados: Nesta etapa, os dados são limpos, transformados e preparados para serem utilizados no modelo de machine learning. Isto inclui tarefas como normalização, codificação, preenchimento de valores ausentes, remoção de outliers, etc.</p>
-<p>Divisão dos dados em conjuntos de treinamento e teste: Nesta etapa, os dados são divididos em conjuntos de treinamento e teste para avaliar o desempenho do modelo.</p>
-
-
-6. **TREINAMENTO ALGORITMOS DE MACHINE LEARNING**
-<p>Modelagem ou Seleção do modelo: Nesta etapa, um modelo de machine learning é escolhido com base na tarefa a ser realizada e nos dados disponíveis.</p>
-
-
-7. **IMPLEMENTAR O MODELO PARA A PRODUÇÃO**
-<p>Implantação: Nesta etapa, o modelo é implantado em um ambiente de produção para utilização em situações reais para resolver o problema.</p>
-
-
-8. **INSIGHTS**
-<p>Nesta etapa, são identificadas as principais descobertas e conclusões do projeto.</p>
-
-
-9. **PRÓXIMO PASSOS**
-<p>Nesta etapa, são definidos os próximos passos a serem tomados com base nos resultados obtidos e nos insights identificados. Isso pode incluir melhorias no modelo existente, coleta de mais dados, exploração de diferentes modelos, entre outros.</p>
-
-<br>
-
-# _5. Insights_
-
-*Resumo dos insights durante análise exploratória de dados (EDA):*
-
-**Gráfico para visualizar a distribuição dos caracteres de cada um dos reviews.**
-
-<div align="center">
-<img src="Imagens/Distribuicao_dos_caracteres.png" width="800px">
-</div>
-</br>
-
-**Nota:**
-- Podemos observar que a maioria dos textos tem entre 0, 100 e 200 caracteres e temos alguns outros reviews mais para direita com quase 2 mil caracteres.
-
-**Gráfico para encontrar algum tipo de relação entre a variação do produto e a nota da pessoa.**
-
-<div align="center">
-<img src="Imagens/Variacao_do_produto.png" width="700px">
-</div>
-</br>
-
-**Nota:**
-- Temos 16 categorias para classificar o produto.
-- Podemos obervar que o produto que tem o menor rating tem a cor branca (white), talves as pessoas acabem não gostando tanto assim da cor branca e preferem outro tipo de cor e pode ser um indicativo de que essa cor não seja tão interessante para este produto.
-
-**Gráfico da nuvem das palavras negativas.**
+**A grande maioria dos clientes está satisfeita.**
 
 <div align="center">
-<img src="Imagens/nuvem_palavras.PNG" width="500px">
+<img src="Imagens/Distribuicao%20positivos%20x%20negativos.png" width="550px">
 </div>
-</br>
 
-**Nota:**
-- A palavra mais falada é **'device'**, que provavelmente estão reclamando do **'dispositivo'**.
+- Só **8,6%** dos reviews são negativos. Por isso, "acertar 91%" não significa nada: um modelo que dissesse que todo review é positivo já acertaria isso.
 
-<br>
-
-# _6. Modelos de Machine Learning_
-
-_**Balanceamento dos dados:**_
+**Cliente insatisfeito escreve mais.**
 
 <div align="center">
-<img src="Imagens/DistribuicaoOpiniaoSMOTE.png" width="450px">
+<img src="Imagens/Tamanho%20por%20sentimento.png" width="650px">
 </div>
-</br>
 
-_**Foi usado dois algoritmos para construir o modelo de classificação:**_
+- O review negativo mediano tem **163 caracteres**, mais que o dobro do positivo (**75**). Quem está insatisfeito **explica o problema**.
 
-1. Naive Bayes.
-2. Regressão Logística.
-
-<br>
-
-# _7. Performance do Modelo de Machine Learning_
-
-Analisando este estudo de caso é **mais interessante capturar os reviews negativos**, então o modelo Naive Bayes tem um melhor desempenho, embora que a diferença seja pouca, com um f1-score de 93%.
+**Negações são o sinal mais claro de insatisfação.**
 
 <div align="center">
-<img src="Imagens/Desempenho_Modelo.PNG" width="300px">
+<img src="Imagens/Negacao%20por%20sentimento.png" width="650px">
 </div>
-</br>
 
-Matriz de confusão - Naive Bayes
+- **63%** dos reviews negativos têm alguma negação (*not*, *no*, *don't*), contra **20%** dos positivos.
+
+**Alguns produtos recebem mais críticas.**
 
 <div align="center">
-<img src="Imagens/Matriz_Confusao.PNG" width="300px">
+<img src="Imagens/%25%20negativos%20por%20variacao.png" width="750px">
 </div>
-</br>
 
-- Na classe 0 (texto negativo):
- - O algoritmo classificou corretamente 45 textos como negativos e 32 textos que algoritmo errou porque de fato são textos positivos.
+- As variações **White**, **Black** e **Black Spot** têm de 13% a 16% de reviews negativos, contra menos de 3% dos modelos com acabamento em tecido.
 
+**O que os clientes escrevem.**
 
-- Na classe 1 (texto positivo):
- - O algoritmo classificou de forma errada 85 textos como negativos e 783 textos que algoritmo acertou porque de fato eles positivos.
+<div align="center">
+<img src="Imagens/Top%20palavras%20por%20sentimento.png" width="850px">
+</div>
 
-<br>
+- Os positivos falam de **uso e satisfação** (*love*, *great*, *music*, *easy*); os negativos, do **aparelho e do funcionamento** (*device*, *work*, *screen*).
 
-# _8. Conclusão_
+## 8. Construção da solução
 
-E o resultado desta solução, caso fosse implementada, seria proporcionar uma análise dos reviews das pessoas e classificar os textos entre positivos e negativos, desta forma a empresa pode tomar alguma atitude, entrando em contato com o cliente para ver o que exatamente aconteceu.
+**1️⃣ Limpeza da base**: removemos **80 reviews vazios** e **715 duplicados (23% da base)**. Duplicados são perigosos: se a cópia de um review cai no treino e a outra no teste, o modelo é avaliado num texto que já viu, e o resultado parece melhor do que é.
 
-<br>
+**2️⃣ Limpeza do texto**: tudo em minúsculas, sem pontuação e sem palavras muito comuns que não indicam sentimento (*the*, *is*, *my*). As **negações foram mantidas**: sem elas, *"it does **not** work"* e *"it works"* ficariam quase iguais.
 
-# _9. Próximos passos_
+**3️⃣ Texto → números (TF-IDF)**: o computador não lê texto, então cada review vira uma lista de números que representa as palavras que ele contém. Palavras que aparecem em todo review (como *echo*) recebem peso baixo; palavras que diferenciam um review dos outros, peso alto.
 
-Na etapa de treinamento de algoritmos de machine learning fazer a otmização dos hiperparâmetros.
+> 💡 **Analogia:** o TF-IDF funciona como um marca-texto, destacando as palavras que realmente importam em cada review.
+
+**4️⃣ Comparação de modelos**: testamos 4 combinações com validação cruzada, medindo a capacidade de **encontrar os reviews negativos**:
+
+| Modelo | Precisão | Recall | F1 |
+|---|---|---|---|
+| Naive Bayes + SMOTE *(abordagem da v1)* | 37,6% | 74,4% | 49,9% |
+| Regressão Logística + SMOTE | 50,9% | 64,0% | 56,6% |
+| **Regressão Logística (class_weight)** ✅ | 47,6% | 70,1% | **56,6%** |
+| LinearSVC (class_weight) | 59,9% | 53,1% | 55,9% |
+
+A **Regressão Logística** foi escolhida por ter o melhor F1, um recall alto e por ser **interpretável**: cada palavra tem um peso que mostra se ela empurra o review para positivo ou negativo. Depois do ajuste fino, a qualidade do modelo (PR-AUC) subiu de **0,57 para 0,64**.
+
+**5️⃣ Escolha do limiar**: o modelo dá um **score** de 0 a 1 para cada review. O limiar é o ponto a partir do qual o review é considerado negativo.
+
+<div align="center">
+<img src="Imagens/Escolha%20do%20limiar.png" width="700px">
+</div>
+
+- Para o atendimento, **deixar um cliente insatisfeito sem resposta custa mais** do que ler um review a mais. Por isso o limiar foi reduzido de 0,50 para **0,34**, escolhido para encontrar pelo menos 75% dos negativos.
+- A escolha foi feita **só com os dados de treino**, e o teste foi usado uma única vez, no final.
+
+## 9. Resultado do modelo
+
+Avaliação no **teste** (477 reviews que o modelo nunca viu, sendo 41 negativos):
+
+| Métrica | Valor | Em linguagem de negócio |
+|---|---|---|
+| **Recall** | **70,7%** | De cada **10 clientes insatisfeitos**, o modelo encontra **7** |
+| **Precisão** | **53,7%** | De cada **2 alertas**, ~**1** é realmente um review negativo |
+| **F1** | **61,1%** | Equilíbrio entre os dois (era 43% na versão original) |
+
+<div align="center">
+<img src="Imagens/Matriz%20de%20confusao.png" width="380px">
+</div>
+
+- Na prática, o time lê **54 dos 477 reviews (11%)** e encontra **29 dos 41** clientes insatisfeitos.
+- **8 dos 25 alarmes falsos** são reviews **nota 3**, que o rótulo considera positivos, mas que contêm críticas (ex.: *"I try use with yale lock but isn't work"*).
+
+## 10. Palavras que mais indicam insatisfação
+
+<div align="center">
+<img src="Imagens/Palavras%20que%20mais%20influenciam%20o%20modelo.png" width="850px">
+</div>
+
+- **"not"** é a palavra mais forte de todas.
+- **"back"** e **"return"** indicam **intenção de devolver o produto**: esses clientes devem ter prioridade no atendimento.
+- **"siri"** aparece quando o cliente **compara com a concorrência**.
+
+## 11. App interativo (Streamlit)
+
+O time de atendimento pode usar o modelo **sem precisar de código**:
+
+1. Cole o review e escolha a variação do produto.
+2. Clique em **Analisar sentimento**.
+3. O app mostra se o review é **positivo ou negativo**, o **score de negatividade**, a **ação sugerida** e as **palavras que mais pesaram** na decisão.
+
+```bash
+streamlit run app.py
+```
+
+> ℹ️ O app usa o arquivo `Model/modelo_sentimento.pkl`, gerado ao executar o notebook até a Fase 05.
+
+<!-- Adicione aqui um GIF de demonstração do app: <img src="Imagens/app.gif" width="800px"> -->
+
+## 12. O que mudou da v1 para a v2
+
+A versão original foi mantida no repositório para mostrar a evolução. Na v2:
+
+| Versão original (v1) | Versão 2 | Por que importa |
+|---|---|---|
+| Reviews duplicados (23%) mantidos | Removidos **antes** de separar treino e teste | Evita avaliar o modelo em textos que ele já viu |
+| Stopwords removiam *not*, *no*, *don't* | **Negações mantidas** | *"not good"* deixa de virar *"good"* |
+| Vocabulário criado com a base inteira | Tudo dentro de um **Pipeline** treinado só no treino | Sem vazamento de informação do teste |
+| Destaque para o F1 da classe positiva (93%) | Métricas da **classe negativa** (a que importa) | O F1 negativo real era 43% |
+| Limiar escolhido **no teste** (e com as classes invertidas) | Limiar escolhido por validação cruzada no treino | Avaliação honesta |
+| Naive Bayes x Regressão Logística | 4 modelos comparados + ajuste fino + calibração | Escolha justificada |
+| Anotação dizia que nota 3 era negativa | Corrigido: nota 3 é rotulada como **positiva** | Entendimento correto do rótulo |
+
+## 13. Insights
+
+1. **Clientes insatisfeitos escrevem o dobro**: os reviews negativos trazem detalhes do problema, o que é informação valiosa para o time de produto.
+2. **Negação é o principal sinal de insatisfação**: remover *not* na limpeza do texto apaga justamente o que mais importa.
+3. **Intenção de devolução é detectável**: *back* e *return* identificam clientes prestes a devolver o produto.
+4. **Alguns produtos geram mais críticas**: White, Black e Black Spot têm até 6 vezes mais reviews negativos que os modelos em tecido.
+5. **O modelo reduz o trabalho manual**: lendo ~11% dos reviews, o time encontra 7 em cada 10 clientes insatisfeitos.
+
+## 14. Limites
+
+- **Poucos exemplos negativos** (205): o teste tem só 41, então os resultados variam alguns pontos percentuais com pequenas mudanças.
+- **Rótulo imperfeito**: reviews nota 3 são considerados positivos, mas muitos contêm críticas.
+- **Palavras isoladas**: o modelo não entende ironia, sarcasmo nem contexto (ex.: *"disappoint"* aparece tanto em *"does not disappoint"* quanto em críticas).
+- **Somente inglês** e um período curto de dados (maio a julho de 2018).
+
+## 15. Próximos passos
+
+1. **Revisar o rótulo** dos reviews nota 3 e considerar uma classe "neutra".
+2. **Coletar mais reviews negativos**, o ganho mais rápido para o modelo.
+3. **Testar modelos de linguagem** (embeddings ou BERT/DistilBERT), que entendem contexto e sarcasmo.
+4. **Monitorar em produção** a precisão dos alertas e ajustar o limiar.
+5. **Publicar o app** no Streamlit Community Cloud e adicionar um GIF de demonstração.
+
+---
+
+📫 **Contato:** [GitHub](https://github.com/RafaelSilva89) · [Portfólio](https://rafaelsilva89.github.io/portfolioProjetos/)
