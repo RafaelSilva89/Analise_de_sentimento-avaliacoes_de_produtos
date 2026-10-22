@@ -163,6 +163,12 @@ streamlit run app.py
 
 > 💡 **Analogia:** o TF-IDF funciona como um marca-texto, destacando as palavras que realmente importam em cada review.
 
+**🔍 Seleção de variáveis**: medimos a relevância de cada uma das 3.927 colunas (palavras e variações do produto) com dois métodos, o **Random Forest** ("quais perguntas o modelo mais usou para decidir") e a **Informação Mútua** ("quanto a palavra, sozinha, conta sobre o sentimento"). Os dois apontam **"not"** como a variável mais relevante, seguida de palavras de defeito e devolução (*work*, *device*, *back*, *return*, *stopped*). A variação do produto quase não pesa.
+
+<div align="center">
+<img src="Imagens/Informacao%20mutua.png" width="650px">
+</div>
+
 **4️⃣ Comparação de modelos**: testamos 4 combinações com validação cruzada, medindo a capacidade de **encontrar os reviews negativos**:
 
 | Modelo | Precisão | Recall | F1 |
